@@ -13,7 +13,7 @@ pub struct Power<'a> {
 #[derive(Debug)]
 struct BrightNess {
     max_brightness: u8,
-    brightness: u8,
+    percent: u8,
     bright_device: String,
 }
 
@@ -67,10 +67,11 @@ impl BrightNess {
         let path = Path::new(&brightness_path);
         let max_brightness = Self::get_num_from_file(&path.join("max_brightness"));
         let brightness = Self::get_num_from_file(&path.join("brightness"));
+        let percent = ((brightness as f64 / max_brightness as f64) * 100f64) as u8;
         
         Self {
             max_brightness,
-            brightness,
+            percent,
             bright_device: brightness_path,
         }
     }
@@ -91,14 +92,16 @@ impl Settings for BrightNess {
 
     fn show(&mut self, ui: &mut eframe::egui::Ui) {
        ui.label("BrightNess");
-       ui.add(Slider::new(&mut self.brightness, 1..=self.max_brightness));
+       ui.add(Slider::new(&mut self.percent, 1..=100));
        ui.end_row();
        println!("{:?}", self);
     }
 
     fn apply(&mut self) {
+        // 1. calculate brightness
+        let brightness = ((self.max_brightness as f64/100.0) * self.percent as f64) as u8;
         let path = Path::new(&self.bright_device).join("brightness");
-        fs::write(path.as_os_str().to_str().unwrap(), &self.brightness.to_string()).unwrap();
+        fs::write(path.as_os_str().to_str().unwrap(), &brightness.to_string()).unwrap();
     }
 }
 
