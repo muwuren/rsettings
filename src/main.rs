@@ -3,11 +3,10 @@ mod display;
 mod power;
 mod settings;
 
-
-use std::collections::BTreeMap;
 use appearance::appearance::Appearance;
-use eframe::{egui, epi, NativeOptions};
 use eframe::epaint::Vec2;
+use eframe::{egui, epi, NativeOptions};
+use std::collections::BTreeMap;
 
 struct MySettings {
     now: u8,
@@ -22,24 +21,28 @@ impl epi::App for MySettings {
     fn update(&mut self, ctx: &egui::Context, frame: &epi::Frame) {
         // side panel
         egui::SidePanel::left("left_panel")
+            .max_width(40.0)
             .resizable(false)
             .show(ctx, |ui| {
+                ui.add_space(5.5);
                 ui.heading("Settings");
-                ui.vertical(|ui| {
-                    for (id, label) in self.labels.iter_mut() {
-                        if ui.button(&*label.name()).clicked() {
-                            println!("{}", id);
-                            self.now = *id;
+                ui.separator();
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    ui.vertical(|ui| {
+                        for (id, label) in self.labels.iter_mut() {
+                            ui.selectable_value(&mut self.now, *id, label.name());
                         }
-                    }
+                    });
                 });
             });
         // center panel
         egui::CentralPanel::default().show(ctx, |ui| {
-            if self.now != 0 {
-                let f = self.labels.get_mut(&self.now).unwrap();
-                f.show(ui);
-            }
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                if self.now != 0 {
+                    let f = self.labels.get_mut(&self.now).unwrap();
+                    f.show(ui);
+                }
+            });
         });
         // bottom panel
         egui::TopBottomPanel::bottom("bottom")
@@ -94,5 +97,7 @@ fn main() {
     let app = MySettings::default();
     let mut native_options = NativeOptions::default();
     native_options.initial_window_size = Some(Vec2::new(600.0, 400.0));
+    native_options.min_window_size = Some(Vec2::new(300.0, 400.0));
+    native_options.resizable = true;
     eframe::run_native(Box::new(app), native_options)
 }

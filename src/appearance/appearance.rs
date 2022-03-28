@@ -20,6 +20,7 @@ impl Settings for Appearance<'_> {
         ui.separator();
         Grid::new("appearance_grid")
             .num_columns(2)
+            .spacing([100.0, 8.0])
             .striped(true)
             .show(ui, |ui| {
                 ui.label("GTK Theme");

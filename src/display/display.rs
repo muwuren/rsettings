@@ -55,7 +55,7 @@ impl Settings for Display {
         ui.separator();
         Grid::new("display_grid")
             .num_columns(2)
-            .spacing([80.0, 8.0])
+            .spacing([100.0, 8.0])
             .striped(true)
             .show(ui, |ui| {
                 self.show_ui(ui);
@@ -203,7 +203,7 @@ impl Display {
                 ui.selectable_value(&mut self.transform, Transform::Flipped, "flipped");
             });
         ui.end_row();
-        ui.label("Resolution and Refresh");
+        ui.label("Resolution&Refresh");
         ui.horizontal(|ui| {
             ComboBox::from_label("")
                 .selected_text(self.now_mode.resolution.as_str())
