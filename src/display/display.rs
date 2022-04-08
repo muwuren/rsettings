@@ -4,6 +4,7 @@ use eframe::egui::{self, ComboBox, Grid, Ui};
 use regex::Regex;
 use std::collections::BTreeMap;
 use std::process::Command;
+use std::str::Lines;
 
 /// Display for display
 pub struct Displays {
@@ -36,8 +37,25 @@ impl Settings for Displays {
         "Displays And Resolution"
     }
     fn show(&mut self, ui: &mut eframe::egui::Ui) {
-        let now_dis = self.displays.get_mut(&self.now).unwrap();
-        now_dis.show(ui);
+        ui.heading("Resize and Roate display");
+        ui.separator();
+        Grid::new("display_grid")
+            .num_columns(2)
+            .spacing([100.0, 8.0])
+            .striped(true)
+            .show(ui, |ui| {
+                ui.label("Display");
+                ComboBox::from_label("")
+                    .selected_text(self.now.as_str())
+                    .show_ui(ui, |ui| {
+                        for (name, _) in self.displays.iter() {
+                            ui.selectable_value(&mut self.now, name.to_owned(), name.as_str());
+                        }
+                    });
+                ui.end_row();
+                let now_dis = self.displays.get_mut(&self.now).unwrap();
+                now_dis.show(ui);
+            });
     }
     fn apply(&mut self) {
         for (_, display) in &mut self.displays {
@@ -51,138 +69,6 @@ impl Settings for Display {
         &self.name
     }
     fn show(&mut self, ui: &mut eframe::egui::Ui) {
-        ui.heading("Resize and Roate display");
-        ui.separator();
-        Grid::new("display_grid")
-            .num_columns(2)
-            .spacing([100.0, 8.0])
-            .striped(true)
-            .show(ui, |ui| {
-                self.show_ui(ui);
-            });
-    }
-    fn apply(&mut self) {
-        println!("apply {}", self.name);
-        let enable = if self.enable { "--on" } else { "--off" };
-        let output = Command::new("wlr-randr")
-            .arg("--output")
-            .arg(&self.name)
-            .arg("--mode")
-            .arg(format!(
-                "{}@{}",
-                &self.now_mode.resolution, self.now_mode.refresh
-            ))
-            .arg("--scale")
-            .arg(&self.scale.to_string())
-            .arg("--transform")
-            .arg(&self.transform.as_str())
-            .arg(enable)
-            .arg("--pos")
-            .arg(&format!("{},{}", self.position.0, self.position.1))
-            .output()
-            .expect("Execute wlr-randr error");
-        if !output.status.success() {
-            eprintln!("wlr-randr execute error");
-        }
-    }
-}
-
-impl Default for Displays {
-    fn default() -> Self {
-        Self::init()
-    }
-}
-impl Displays {
-    fn init() -> Self {
-        let mut display = Display::default();
-        let output = Command::new("wlr-randr").output().unwrap();
-        let out = String::from_utf8(output.stdout).unwrap();
-        let mut outs = out.lines();
-        // 1. parser name and description
-        let line = outs.next().unwrap();
-        let datas: Vec<&str> = line.trim().split(' ').collect();
-        let mut iter = datas.iter();
-        let name = iter.next().unwrap();
-        let mut description = String::new();
-        for d in iter {
-            description += d;
-            description += " ";
-        }
-        display.name = name.to_string();
-        display.description = description;
-
-        // 2. parser physical_size
-        let line = outs.next().unwrap();
-        let datas: Vec<&str> = line.trim().split(':').collect();
-        let physical_size = datas.get(1).unwrap();
-        display.physical_size = physical_size.to_string();
-
-        // 3. parser enable
-        let line = outs.next().unwrap();
-        let datas: Vec<&str> = line.trim().split(':').collect();
-        let enable_s = datas.get(1).unwrap();
-        let mut enable = false;
-        if enable_s.trim() == "yes" {
-            enable = true;
-        }
-        display.enable = enable;
-
-        // 4. parser modes and position
-        outs.next();
-        let re = Regex::new(r"\s*(.*)\spx,\s(\d*\.\d*)\sHz").unwrap();
-        loop {
-            let line = outs.next().unwrap();
-            if !line.contains("Hz") {
-                let re = Regex::new(r"\s*:\s(\d),(\d)").unwrap();
-                let caps = re.captures(line).unwrap();
-                display.position = (
-                    caps.get(1).unwrap().as_str().parse().unwrap(),
-                    caps.get(2).unwrap().as_str().parse().unwrap(),
-                );
-                break;
-            }
-            let caps = re.captures(line).unwrap();
-            println!("{:?}", caps);
-            let mode = Resolution {
-                resolution: caps.get(1).unwrap().as_str().to_string(),
-                refresh: caps.get(2).unwrap().as_str().parse().unwrap(),
-            };
-            display.mode.push(mode.clone());
-            if line.contains("current") {
-                display.now_mode = mode;
-            }
-        }
-
-        // 5. parser transform and scale
-        let re = Regex::new(r"\s*:\s([\w|\.]*)").unwrap();
-        let transform = re
-            .captures(outs.next().unwrap())
-            .unwrap()
-            .get(1)
-            .unwrap()
-            .as_str();
-        display.transform = Transform::from_str(transform).unwrap();
-        display.scale = re
-            .captures(outs.next().unwrap())
-            .unwrap()
-            .get(1)
-            .unwrap()
-            .as_str()
-            .parse()
-            .unwrap();
-        let mut displays = BTreeMap::new();
-        let now = display.name.to_owned();
-        displays.insert(display.name.to_owned(), display);
-
-        Self { displays, now }
-    }
-}
-
-impl Display {
-    fn show_ui(&mut self, ui: &mut Ui) {
-        ui.label("Display");
-        ui.label(&self.name);
-        ui.end_row();
         ui.label("Display Name");
         ui.label(&self.description);
         ui.end_row();
@@ -241,6 +127,132 @@ impl Display {
         ui.label("Scale");
         ui.add(egui::Slider::new(&mut self.scale, 0.1..=5.0));
         ui.end_row();
+    }
+    fn apply(&mut self) {
+        println!("apply {}", self.name);
+        let enable = if self.enable { "--on" } else { "--off" };
+        let output = Command::new("wlr-randr")
+            .arg("--output")
+            .arg(&self.name)
+            .arg("--mode")
+            .arg(format!(
+                "{}@{}",
+                &self.now_mode.resolution, self.now_mode.refresh
+            ))
+            .arg("--scale")
+            .arg(&self.scale.to_string())
+            .arg("--transform")
+            .arg(&self.transform.as_str())
+            .arg(enable)
+            .arg("--pos")
+            .arg(&format!("{},{}", self.position.0, self.position.1))
+            .output()
+            .expect("Execute wlr-randr error");
+        if !output.status.success() {
+            eprintln!("wlr-randr execute error");
+        }
+    }
+}
+
+impl Default for Displays {
+    fn default() -> Self {
+        Self::init()
+    }
+}
+
+impl Displays {
+    fn init() -> Self {
+        // 1. get display info
+        let output = Command::new("wlr-randr").output().unwrap();
+        let out = String::from_utf8(output.stdout).unwrap();
+        let mut outs = out.lines();
+
+        // 2. parser display info
+        let mut now = String::new();
+        let mut displays = BTreeMap::new();
+        while let Some(line) = outs.next() {
+            let display = Self::parser_display(&mut outs, line);
+            now = display.name.to_owned();
+            displays.insert(display.name.to_owned(), display);
+        }
+
+        Self { displays, now }
+    }
+
+    fn parser_display(outs: &mut Lines, first_line: &str) -> Display {
+        // 1. parser name and description
+        let mut display = Display::default();
+        let datas: Vec<&str> = first_line.trim().split(' ').collect();
+        let mut iter = datas.iter();
+        let name = iter.next().unwrap();
+        let mut description = String::new();
+        for d in iter {
+            description += d;
+            description += " ";
+        }
+        display.name = name.to_string();
+        display.description = description;
+
+        // 2. parser physical_size
+        let line = outs.next().unwrap();
+        let datas: Vec<&str> = line.trim().split(':').collect();
+        let physical_size = datas.get(1).unwrap();
+        display.physical_size = physical_size.to_string();
+
+        // 3. parser enable
+        let line = outs.next().unwrap();
+        let datas: Vec<&str> = line.trim().split(':').collect();
+        let enable_s = datas.get(1).unwrap();
+        let mut enable = false;
+        if enable_s.trim() == "yes" {
+            enable = true;
+        }
+        display.enable = enable;
+
+        // 4. parser modes and position
+        outs.next();
+        let re = Regex::new(r"\s*(.*)\spx,\s(\d*\.\d*)\sHz").unwrap();
+        loop {
+            let line = outs.next().unwrap();
+            if !line.contains("Hz") {
+                let re = Regex::new(r"\s*:\s(\d+),(\d+)").unwrap();
+                let caps = re.captures(line).unwrap();
+                display.position = (
+                    caps.get(1).unwrap().as_str().parse().unwrap(),
+                    caps.get(2).unwrap().as_str().parse().unwrap(),
+                );
+                break;
+            }
+            let caps = re.captures(line).unwrap();
+            println!("{:?}", caps);
+            let mode = Resolution {
+                resolution: caps.get(1).unwrap().as_str().to_string(),
+                refresh: caps.get(2).unwrap().as_str().parse().unwrap(),
+            };
+            display.mode.push(mode.clone());
+            if line.contains("current") {
+                display.now_mode = mode;
+            }
+        }
+
+        // 5. parser transform and scale
+        let re = Regex::new(r"\s*:\s([\w|\.]*)").unwrap();
+        let transform = re
+            .captures(outs.next().unwrap())
+            .unwrap()
+            .get(1)
+            .unwrap()
+            .as_str();
+        display.transform = Transform::from_str(transform).unwrap();
+        display.scale = re
+            .captures(outs.next().unwrap())
+            .unwrap()
+            .get(1)
+            .unwrap()
+            .as_str()
+            .parse()
+            .unwrap();
+        display
     }
 }
 
