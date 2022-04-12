@@ -5,11 +5,12 @@ use eframe::egui::{ComboBox, Grid, Slider, TextBuffer, Ui};
 
 use crate::settings::settings::Settings;
 
-pub struct Power<'a> {
-    name: &'a str,
+#[derive(Default)]
+pub struct Power {
     brightness: BrightNess,
     lenovo: LenovoBattery,
     cpufreq: CPUFreq,
+    init: bool,
 }
 
 ///cpu freq
@@ -22,6 +23,12 @@ enum CPUFreq {
     Conservative,
     Schedutil,
     Unknown,
+}
+
+impl Default for CPUFreq {
+    fn default() -> Self {
+        Self::Unknown
+    }
 }
 
 impl CPUFreq {
@@ -71,6 +78,7 @@ impl CPUFreq {
     }
 }
 
+#[derive(Default)]
 struct LenovoBattery {
     saving: bool,
     lenovo: bool,
@@ -112,21 +120,33 @@ impl LenovoBattery {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct BrightNess {
     max_brightness: u8,
     percent: u8,
     bright_device: String,
 }
 
-impl Settings for Power<'_> {
+impl Settings for Power {
+    fn init(&mut self) {
+        let brightness = BrightNess::new();
+        let lenovo = LenovoBattery::new();
+        let cpufreq = CPUFreq::new();
+        self.brightness = brightness;
+        self.lenovo = lenovo;
+        self.cpufreq = cpufreq;
+        self.init = true;
+    }
+
+    fn is_init(&self) -> bool {
+        self.init   
+    }
+
     fn name(&self) -> &str {
-        self.name
+        "Power Manager"
     }
 
     fn show(&mut self, ui: &mut eframe::egui::Ui) {
-        ui.heading(self.name());
-        ui.separator();
         Grid::new("power_grid")
             .num_columns(2)
             .spacing([100.0, 8.0])
@@ -141,20 +161,6 @@ impl Settings for Power<'_> {
     fn apply(&mut self) {
         println!("Power apply");
         self.brightness.apply();
-    }
-}
-
-impl Default for Power<'_> {
-    fn default() -> Self {
-        let brightness = BrightNess::new();
-        let lenovo = LenovoBattery::new();
-        let cpufreq = CPUFreq::new();
-        Self {
-            name: "Power Manager",
-            brightness,
-            lenovo,
-            cpufreq,
-        }
     }
 }
 
@@ -194,6 +200,9 @@ impl BrightNess {
 }
 
 impl Settings for BrightNess {
+    fn init(&mut self) {
+        
+    }
     fn name(&self) -> &str {
         "BrightNess"
     }

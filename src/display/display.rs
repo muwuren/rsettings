@@ -7,9 +7,11 @@ use std::process::Command;
 use std::str::Lines;
 
 /// Display for display
+#[derive(Default)]
 pub struct Displays {
     displays: BTreeMap<String, Display>,
     now: String,
+    init: bool,
 }
 
 /// Display
@@ -33,12 +35,25 @@ struct Resolution {
 }
 
 impl Settings for Displays {
+    fn init(&mut self) {
+        let displays = Self::_init();
+        self.displays = displays.displays;
+        self.now = displays.now;
+        self.init = true;
+    }
+
+    fn is_init(&self) -> bool {
+        self.init
+    }
+
     fn name(&self) -> &str {
         "Displays And Resolution"
     }
+    fn heading(&self) -> &str {
+        "Resize and Roate display"  
+    }
+
     fn show(&mut self, ui: &mut eframe::egui::Ui) {
-        ui.heading("Resize and Roate display");
-        ui.separator();
         Grid::new("display_grid")
             .num_columns(2)
             .spacing([100.0, 8.0])
@@ -65,6 +80,8 @@ impl Settings for Displays {
 }
 
 impl Settings for Display {
+    fn init(&mut self) {
+    }
     fn name(&self) -> &str {
         &self.name
     }
@@ -154,14 +171,8 @@ impl Settings for Display {
     }
 }
 
-impl Default for Displays {
-    fn default() -> Self {
-        Self::init()
-    }
-}
-
 impl Displays {
-    fn init() -> Self {
+    fn _init() -> Self {
         // 1. get display info
         let output = Command::new("wlr-randr").output().unwrap();
         let out = String::from_utf8(output.stdout).unwrap();
@@ -176,7 +187,7 @@ impl Displays {
             displays.insert(display.name.to_owned(), display);
         }
 
-        Self { displays, now }
+        Self { displays, now, init: false }
     }
 
     fn parser_display(outs: &mut Lines, first_line: &str) -> Display {
