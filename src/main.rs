@@ -2,7 +2,7 @@ mod appearance;
 mod display;
 mod power;
 mod settings;
-//mod network;
+mod network;
 
 use appearance::appearance::Appearance;
 use eframe::epaint::Vec2;
@@ -90,6 +90,9 @@ impl epi::App for MySettings {
         // 3. add power manager
         let power = power::power::Power::default();
         self.add_label(3, Box::new(power));
+        // 4. add network
+        let network = network::network::Network::default();
+        self.add_label(4, Box::new(network));
     }
 }
 
