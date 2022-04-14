@@ -38,7 +38,7 @@ impl epi::App for MySettings {
             });
         // center panel
         egui::CentralPanel::default().show(ctx, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
+            egui::ScrollArea::new([true, true]).show(ui, |ui| {
                 if self.now != 0 {
                     let f = self.labels.get_mut(&self.now).unwrap();
                     if !f.is_init() {
