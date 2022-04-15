@@ -1,7 +1,7 @@
 use crate::settings::settings::Settings;
 
 use eframe::egui;
-use std::{process::Command, collections::HashSet};
+use std::{collections::HashSet, process::Command};
 
 #[derive(Default)]
 pub struct Network {
@@ -53,7 +53,22 @@ impl Settings for Network {
         "Network"
     }
 
-    fn apply(&mut self) {}
+    fn apply(&mut self) {
+        // 1. apply devices
+        for device in self.devices.iter() {
+            let mut connect = "";
+            if device.status {
+                connect = "connect";
+            } else {
+                connect = "disconnect";
+            }
+            Command::new("nmcli")
+                .args(["device", connect, device.device.as_str()])
+                .spawn();
+        }
+        // 2. apply wifi
+        Command::new("nmcli").args(["dev", "wifi", "connect", self.current_wifi.as_str()]).spawn();
+    }
 
     fn show(&mut self, ui: &mut eframe::egui::Ui) {
         egui::Grid::new("network grid")
@@ -110,6 +125,10 @@ impl Network {
             let current = data.next().unwrap();
             wifi.bssid = data.next().unwrap().replace('-', ":");
             wifi.ssid = data.next().unwrap().to_string();
+            println!("{}", wifi.ssid.as_str());
+            if wifi.ssid.is_empty() {
+                continue;
+            }
             wifi.mode = data.next().unwrap().to_string();
             wifi.chan = data.next().unwrap().parse().unwrap();
             wifi.rate = data.next().unwrap().to_string();
@@ -119,7 +138,7 @@ impl Network {
 
             // b. if current wifi
             if current == "*" {
-                self.current_wifi = wifi.bssid.clone();
+                self.current_wifi = wifi.ssid.clone();
             }
             self.live_wifis.push(wifi);
         }

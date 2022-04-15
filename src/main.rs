@@ -4,6 +4,7 @@ mod power;
 mod settings;
 mod network;
 
+use crate::egui::{FontData, FontDefinitions, FontFamily};
 use appearance::appearance::Appearance;
 use eframe::epaint::Vec2;
 use eframe::{egui, epi, NativeOptions};
@@ -76,11 +77,11 @@ impl epi::App for MySettings {
         _frame: &epi::Frame,
         _storage: Option<&dyn epi::Storage>,
     ) {
-        //let mut fonts = FontDefinitions::default();
-        //fonts.font_data.insert("my_font".to_string(), FontData::from_static(include_bytes!("/home/nsfoxer/.local/share/fonts/PingFang.ttf")));
-        //fonts.families.get_mut(&FontFamily::Proportional).unwrap()
-        //.insert(0, "my_font".to_owned());
-        //_ctx.set_fonts(fonts);
+        let mut fonts = FontDefinitions::default();
+        fonts.font_data.insert("my_font".to_string(), FontData::from_static(include_bytes!("/home/nsfoxer/.local/share/fonts/PingFang.ttf")));
+        fonts.families.get_mut(&FontFamily::Proportional).unwrap()
+        .insert(0, "my_font".to_owned());
+        _ctx.set_fonts(fonts);
         // 1. add displays
         let displays = display::display::Displays::default();
         self.add_label(1, Box::new(displays));
