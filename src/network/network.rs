@@ -117,11 +117,11 @@ impl Settings for Network {
                 if *scanwifiing {
                     ui.add(Spinner::new());
                 } else {
-                    // ui.with_layout(egui::Layout::right_to_left(), |ui| {
-                    //     if ui.button("Scan Wifi").clicked() {
-                    //         self.scan_wifi();
-                    //     }
-                    // });
+                    drop(scanwifiing);
+                    if ui.button("Scan Wifi").clicked() {
+                        self.scan_wifi();
+                    }
+                    ui.end_row();
                     if let Ok(wifis) = self.rx.try_recv() {
                         self.live_wifis = wifis;
                     }
@@ -156,7 +156,7 @@ impl Network {
         }
     }
 
-    fn scan_wifi(&mut self) {
+    fn scan_wifi(&self) {
         let mut scanwifiing = self.scanwifiing.lock().unwrap();
         *scanwifiing = true;
         drop(scanwifiing);
@@ -164,6 +164,7 @@ impl Network {
         let tx = self.tx.clone();
         thread::spawn(move || {
             // 1. scan wifi
+            println!("scan wifi");
             let output = Command::new("nmcli")
                 .args(["-t", "device", "wifi", "list"])
                 .output()
@@ -182,7 +183,6 @@ impl Network {
                 let current = data.next().unwrap();
                 wifi.bssid = data.next().unwrap().replace('-', ":");
                 wifi.ssid = data.next().unwrap().to_string();
-                println!("{}", wifi.ssid.as_str());
                 if wifi.ssid.is_empty() {
                     continue;
                 }
@@ -205,6 +205,7 @@ impl Network {
             *scanwifiing = false;
             drop(scanwifiing);
             tx.send(wifis).unwrap();
+            println!("end scan wifi");
         });
     }
 

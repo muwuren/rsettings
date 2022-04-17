@@ -1,8 +1,8 @@
 mod appearance;
 mod display;
+mod network;
 mod power;
 mod settings;
-mod network;
 mod tools;
 
 use crate::egui::{FontData, FontDefinitions, FontFamily};
@@ -22,6 +22,7 @@ impl epi::App for MySettings {
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &epi::Frame) {
+        ctx.set_pixels_per_point(2.5);
         // side panel
         egui::SidePanel::left("left_panel")
             .max_width(40.0)
@@ -74,15 +75,24 @@ impl epi::App for MySettings {
 
     fn setup(
         &mut self,
-        _ctx: &egui::Context,
+        ctx: &egui::Context,
         _frame: &epi::Frame,
         _storage: Option<&dyn epi::Storage>,
     ) {
         let mut fonts = FontDefinitions::default();
-        fonts.font_data.insert("my_font".to_string(), FontData::from_static(include_bytes!("/home/nsfoxer/.local/share/fonts/PingFang.ttf")));
-        fonts.families.get_mut(&FontFamily::Proportional).unwrap()
-        .insert(0, "my_font".to_owned());
-        _ctx.set_fonts(fonts);
+        fonts.font_data.insert(
+            "my_font".to_string(),
+            FontData::from_static(include_bytes!(
+                "/home/nsfoxer/.local/share/fonts/PingFang.ttf"
+            )),
+        );
+        fonts
+            .families
+            .get_mut(&FontFamily::Proportional)
+            .unwrap()
+            .insert(0, "my_font".to_owned());
+        ctx.set_fonts(fonts);
+        ctx.set_pixels_per_point(2.5);
         // 1. add displays
         let displays = display::display::Displays::default();
         self.add_label(1, Box::new(displays));
@@ -119,8 +129,8 @@ impl MySettings {
 fn main() {
     let app = MySettings::default();
     let mut native_options = NativeOptions::default();
-    native_options.initial_window_size = Some(Vec2::new(600.0, 400.0));
-    native_options.min_window_size = Some(Vec2::new(300.0, 400.0));
+    native_options.initial_window_size = Some(Vec2::new(800.0, 600.0));
+    native_options.min_window_size = Some(Vec2::new(400.0, 300.0));
     native_options.resizable = true;
     eframe::run_native(Box::new(app), native_options)
 }
