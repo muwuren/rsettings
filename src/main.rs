@@ -3,6 +3,7 @@ mod display;
 mod power;
 mod settings;
 mod network;
+mod tools;
 
 use crate::egui::{FontData, FontDefinitions, FontFamily};
 use appearance::appearance::Appearance;
@@ -94,6 +95,9 @@ impl epi::App for MySettings {
         // 4. add network
         let network = network::network::Network::default();
         self.add_label(4, Box::new(network));
+        // 5. add tools
+        let tools = tools::tools::Tools::default();
+        self.add_label(5, Box::new(tools));
     }
 }
 

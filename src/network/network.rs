@@ -1,14 +1,24 @@
 use crate::settings::settings::Settings;
 
-use eframe::egui;
-use std::{collections::HashSet, process::Command};
+use eframe::egui::{self, Spinner};
+use std::{
+    collections::HashSet,
+    process::Command,
+    sync::{
+        mpsc::{channel, Receiver, Sender},
+        Arc, Mutex,
+    },
+    thread,
+};
 
-#[derive(Default)]
 pub struct Network {
     devices: Vec<Device>,
     live_wifis: Vec<Wifi>,
     known_wifis: HashSet<String>,
-    current_wifi: String,
+    current_wifi_id: u8,
+    scanwifiing: Arc<Mutex<bool>>,
+    tx: Sender<Vec<Wifi>>,
+    rx: Receiver<Vec<Wifi>>,
     init: bool,
 }
 
@@ -20,6 +30,7 @@ struct Device {
 
 #[derive(Default)]
 struct Wifi {
+    id: u8,
     bssid: String,
     ssid: String,
     mode: String,
@@ -28,6 +39,22 @@ struct Wifi {
     signal: u8,
     bras: String,
     security: String,
+}
+
+impl Default for Network {
+    fn default() -> Self {
+        let (tx, rx) = channel();
+        Self {
+            devices: Vec::new(),
+            live_wifis: Vec::new(),
+            known_wifis: HashSet::new(),
+            current_wifi_id: 0,
+            scanwifiing: Arc::new(Mutex::new(false)),
+            init: false,
+            tx,
+            rx,
+        }
+    }
 }
 
 impl Settings for Network {
@@ -56,18 +83,24 @@ impl Settings for Network {
     fn apply(&mut self) {
         // 1. apply devices
         for device in self.devices.iter() {
-            let mut connect = "";
+            let mut connect = "disconnect";
             if device.status {
                 connect = "connect";
-            } else {
-                connect = "disconnect";
             }
             Command::new("nmcli")
                 .args(["device", connect, device.device.as_str()])
-                .spawn();
+                .spawn()
+                .unwrap();
         }
         // 2. apply wifi
-        Command::new("nmcli").args(["dev", "wifi", "connect", self.current_wifi.as_str()]).spawn();
+        for wifi in self.live_wifis.iter() {
+            if self.current_wifi_id == wifi.id {
+                Command::new("nmcli")
+                    .args(["dev", "wifi", "connect", wifi.ssid.as_str()])
+                    .spawn()
+                    .unwrap();
+            }
+        }
     }
 
     fn show(&mut self, ui: &mut eframe::egui::Ui) {
@@ -80,12 +113,28 @@ impl Settings for Network {
             });
         ui.separator();
         egui::ScrollArea::both().show(ui, |ui| {
-            egui::Grid::new("wifi").num_columns(6).show(ui, |ui| {
-                for wifi in self.live_wifis.iter_mut() {
-                    wifi.show(ui, &mut self.current_wifi);
-                    ui.end_row();
+            if let Ok(scanwifiing) = self.scanwifiing.try_lock() {
+                if *scanwifiing {
+                    ui.add(Spinner::new());
+                } else {
+                    // ui.with_layout(egui::Layout::right_to_left(), |ui| {
+                    //     if ui.button("Scan Wifi").clicked() {
+                    //         self.scan_wifi();
+                    //     }
+                    // });
+                    if let Ok(wifis) = self.rx.try_recv() {
+                        self.live_wifis = wifis;
+                    }
+                    egui::Grid::new("wifi").num_columns(6).show(ui, |ui| {
+                        for wifi in self.live_wifis.iter_mut() {
+                            wifi.show(ui, &mut self.current_wifi_id);
+                            ui.end_row();
+                        }
+                    });
                 }
-            });
+            } else {
+                ui.add(Spinner::new());
+            }
         });
     }
 }
@@ -108,40 +157,55 @@ impl Network {
     }
 
     fn scan_wifi(&mut self) {
-        // 1. scan wifi
-        let output = Command::new("nmcli")
-            .args(["-t", "device", "wifi", "list"])
-            .output()
-            .unwrap();
-        let stdout = String::from_utf8(output.stdout).unwrap();
-        let mut lines = stdout.lines();
+        let mut scanwifiing = self.scanwifiing.lock().unwrap();
+        *scanwifiing = true;
+        drop(scanwifiing);
+        let scanwifiing = self.scanwifiing.clone();
+        let tx = self.tx.clone();
+        thread::spawn(move || {
+            // 1. scan wifi
+            let output = Command::new("nmcli")
+                .args(["-t", "device", "wifi", "list"])
+                .output()
+                .unwrap();
+            let stdout = String::from_utf8(output.stdout).unwrap();
+            let mut lines = stdout.lines();
 
-        // 2. parser wifi
-        while let Some(line) = lines.next() {
-            let mut wifi = Wifi::default();
-            // a. need to deal with bssid separately
-            let line = line.replace("\\:", "-");
-            let mut data = line.split(':');
-            let current = data.next().unwrap();
-            wifi.bssid = data.next().unwrap().replace('-', ":");
-            wifi.ssid = data.next().unwrap().to_string();
-            println!("{}", wifi.ssid.as_str());
-            if wifi.ssid.is_empty() {
-                continue;
-            }
-            wifi.mode = data.next().unwrap().to_string();
-            wifi.chan = data.next().unwrap().parse().unwrap();
-            wifi.rate = data.next().unwrap().to_string();
-            wifi.signal = data.next().unwrap().parse().unwrap();
-            wifi.bras = data.next().unwrap().to_string();
-            wifi.security = data.next().unwrap().to_string();
+            // 2. parser wifi
+            let mut id = 0;
+            let mut wifis = Vec::new();
+            while let Some(line) = lines.next() {
+                let mut wifi = Wifi::default();
+                // a. need to deal with bssid separately
+                let line = line.replace("\\:", "-");
+                let mut data = line.split(':');
+                let current = data.next().unwrap();
+                wifi.bssid = data.next().unwrap().replace('-', ":");
+                wifi.ssid = data.next().unwrap().to_string();
+                println!("{}", wifi.ssid.as_str());
+                if wifi.ssid.is_empty() {
+                    continue;
+                }
+                wifi.mode = data.next().unwrap().to_string();
+                wifi.chan = data.next().unwrap().parse().unwrap();
+                wifi.rate = data.next().unwrap().to_string();
+                wifi.signal = data.next().unwrap().parse().unwrap();
+                wifi.bras = data.next().unwrap().to_string();
+                wifi.security = data.next().unwrap().to_string();
+                wifi.id = id;
 
-            // b. if current wifi
-            if current == "*" {
-                self.current_wifi = wifi.ssid.clone();
+                // b. if current wifi
+                if current == "*" {
+                    wifi.ssid.push_str(" (*)");
+                }
+                wifis.push(wifi);
+                id += 1;
             }
-            self.live_wifis.push(wifi);
-        }
+            let mut scanwifiing = scanwifiing.lock().unwrap();
+            *scanwifiing = false;
+            drop(scanwifiing);
+            tx.send(wifis).unwrap();
+        });
     }
 
     fn get_known_wifi(&mut self) {
@@ -168,8 +232,8 @@ impl Device {
 }
 
 impl Wifi {
-    fn show(&mut self, ui: &mut eframe::egui::Ui, select: &mut String) {
-        ui.radio_value(select, self.bssid.clone(), "");
+    fn show(&mut self, ui: &mut eframe::egui::Ui, id: &mut u8) {
+        ui.radio_value(id, self.id, "");
         ui.label(&self.ssid);
         ui.label(&self.mode);
         ui.label(self.chan.to_string().as_str());
