@@ -93,6 +93,7 @@ impl epi::App for MySettings {
             .insert(0, "my_font".to_owned());
         ctx.set_fonts(fonts);
         ctx.set_pixels_per_point(2.5);
+        ctx.set_visuals(egui::Visuals::light());
         // 1. add displays
         let displays = display::display::Displays::default();
         self.add_label(1, Box::new(displays));

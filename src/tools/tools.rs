@@ -1,12 +1,16 @@
-use std::sync::Mutex;
-use std::sync::Arc;
-use crate::settings::settings::Settings;
-use eframe::egui::widgets::Spinner;
-use eframe::egui::Grid;
+use std::path::Path;
 use std::process::Command;
+use std::sync::Arc;
 use std::sync::Condvar;
+use std::sync::Mutex;
 use std::thread;
 use std::time::SystemTime;
+
+use crate::settings::settings::Settings;
+use eframe::egui::widgets::Spinner;
+use eframe::egui::{self, Grid};
+use eframe::epaint::Vec2;
+use image;
 
 #[derive(Default)]
 pub struct Tools {
@@ -14,6 +18,7 @@ pub struct Tools {
     screencasting: bool,
     recordgif_cond: Arc<Condvar>,
     recordgifing: bool,
+    shotcut_pics: Option<egui::TextureHandle>,
     init: bool,
 }
 
@@ -33,7 +38,7 @@ impl Settings for Tools {
             // shotcut
             ui.label("Shotcut");
             if ui.button("shotcut").clicked() {
-                self.shotcut();
+                self.shotcut(ui);
             }
             ui.end_row();
             // recorder gif
@@ -54,10 +59,10 @@ impl Settings for Tools {
             // recorder mp4
             ui.label("screnncast");
             if !self.screencasting {
-            if ui.button("screnncast").clicked() {
-                self.screencast();
-                self.screencasting = true;
-            }
+                if ui.button("screnncast").clicked() {
+                    self.screencast();
+                    self.screencasting = true;
+                }
             } else {
                 ui.add(Spinner::new());
                 if ui.button("stop screencast").clicked() {
@@ -66,6 +71,16 @@ impl Settings for Tools {
                 }
             }
         });
+        if let Some(textcutre) = &self.shotcut_pics {
+            let [x, y] = textcutre.size();
+            let r = x as f32 / 400.0;
+            ui.centered_and_justified(|ui| {
+                ui.add(egui::Image::new(
+                    textcutre,
+                    Vec2::new(x as f32 / r, y as f32 / r),
+                ));
+            });
+        }
     }
 
     fn apply(&mut self) {
@@ -91,17 +106,29 @@ impl Tools {
             .unwrap();
     }
 
-    fn shotcut(&self) {
-        let cmd_str = format!(
-            r#"grim -g "$(slurp -p)" ~/temp/{}.png"#,
-            Self::get_now_secs()
-        );
+    fn load_image_from_path(path: &std::path::Path) -> Result<egui::ColorImage, image::ImageError> {
+        let image = image::io::Reader::open(path)?.decode()?;
+        let size = [image.width() as _, image.height() as _];
+        let image_buffer = image.to_rgba8();
+        let pixels = image_buffer.as_flat_samples();
+        Ok(egui::ColorImage::from_rgba_unmultiplied(
+            size,
+            pixels.as_slice(),
+        ))
+    }
+
+    fn shotcut(&mut self, ui: &egui::Ui) {
+        let pic = format!("/tmp/{}.png", Self::get_now_secs());
+        let cmd_str = format!(r#"grim -g "$(slurp)" {}"#, &pic);
         Command::new("zsh")
             .env("XCURSOR_SIZE", "48")
             .arg("-c")
             .arg(cmd_str.as_str())
             .output()
             .unwrap();
+        let img = Self::load_image_from_path(Path::new(pic.as_str())).unwrap();
+        let texture = ui.ctx().load_texture("shotcut", img);
+        self.shotcut_pics = Some(texture);
     }
 
     fn record_gif(&self) {
@@ -112,7 +139,7 @@ impl Tools {
         let cond = self.recordgif_cond.clone();
         thread::spawn(move || {
             let mut cmd = Command::new("zsh");
-                cmd.env("XCURSOR_SIZE", "48")
+            cmd.env("XCURSOR_SIZE", "48")
                 .arg("-c")
                 .arg(cmd_str.as_str());
             let mut child = cmd.spawn().unwrap();
@@ -135,7 +162,7 @@ impl Tools {
         let cond = self.screencast_cond.clone();
         thread::spawn(move || {
             let mut cmd = Command::new("zsh");
-                cmd.env("XCURSOR_SIZE", "48")
+            cmd.env("XCURSOR_SIZE", "48")
                 .arg("-c")
                 .arg(cmd_str.as_str());
             let mut child = cmd.spawn().unwrap();
