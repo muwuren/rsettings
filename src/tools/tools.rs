@@ -72,13 +72,18 @@ impl Settings for Tools {
             }
         });
         if let Some(textcutre) = &self.shotcut_pics {
+            ui.vertical_centered_justified(|ui| {
+            let mut r = 1.0;
             let [x, y] = textcutre.size();
-            let r = x as f32 / 400.0;
+            if x > 400 {
+                r = x as f32 / 400.0;
+            }
             ui.centered_and_justified(|ui| {
                 ui.add(egui::Image::new(
                     textcutre,
                     Vec2::new(x as f32 / r, y as f32 / r),
                 ));
+            });
             });
         }
     }
